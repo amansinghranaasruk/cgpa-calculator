@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GGSIPU CGPA Calculator</title>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+
+<style>
+body {
+    font-family: Arial;
+    margin: 0;
+    background: #f0f0f0;
+    text-align: center;
+}
+
+.dark {
+    background: #121212;
+    color: white;
+}
+
+.container {
+    margin: 20px auto;
+    padding: 15px;
+    width: 95%;
+    max-width: 900px;
+    border-radius: 15px;
+    background: rgba(0,0,0,0.1);
+}
+
+.dark .container {
+    background: rgba(255,255,255,0.1);
+}
+
+.row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin: 5px 0;
+    justify-content: center;
+}
+
+input {
+    padding: 8px;
+    border-radius: 5px;
+    border: none;
+    flex: 1 1 120px;
+}
+
+.grade, .gpa {
+    background: #ddd;
+}
+
+.dark .grade, .dark .gpa {
+    background: #333;
+    color: white;
+}
+
+button {
+    padding: 10px;
+    margin: 5px;
+    border-radius: 5px;
+    border: none;
+    cursor: pointer;
+}
+
+.delete-btn {
+    background: red;
+    color: white;
+}
+
+.controls {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+canvas {
+    width: 100% !important;
+    height: auto !important;
+    margin-top: 20px;
+}
+
+/* 📱 Mobile optimization */
+@media (max-width: 600px) {
+    h2 { font-size: 18px; }
+    input { flex: 1 1 100%; }
+    .row { flex-direction: column; }
+}
+</style>
+</head>
+
+<body>
+
+<button onclick="toggleMode()">🌙 Dark Mode</button>
+
+<div class="container">
+
+<img src="ipu.jpeg" width="100">
+
+<h2>GGSIPU CGPA Calculator</h2>
+
+<p style="font-size:12px; color:gray;">
+* This CGPA calculator is for reference only based on GGSIPU grading system.
+</p>
+
+<div id="subjects"></div>
+
+<div class="controls">
+<button onclick="addSubject()">+ Add Subject</button>
+<button onclick="calculateCGPA()">Calculate</button>
+<button onclick="downloadPDF()">Download PDF</button>
+</div>
+
+<h3 id="result"></h3>
+
+<canvas id="chart"></canvas>
+
+</div>
+
+<script>
+let count = 0;
+let chart;
+
+function getGradeData(marks) {
+    if (marks >= 90) return { grade: "O", gpa: 10 };
+    else if (marks >= 75) return { grade: "A+", gpa: 9 };
+    else if (marks >= 65) return { grade: "A", gpa: 8 };
+    else if (marks >= 55) return { grade: "B+", gpa: 7 };
+    else if (marks >= 50) return { grade: "B", gpa: 6 };
+    else if (marks >= 45) return { grade: "C", gpa: 5 };
+    else if (marks >= 40) return { grade: "P", gpa: 4 };
+    else return { grade: "F", gpa: 0 };
+}
+
+function addSubject() {
+    if (count >= 20) return alert("Max 20 subjects");
+
+    count++;
+
+    let row = document.createElement("div");
+    row.className = "row";
+
+    row.innerHTML = `
+        <input class="name" placeholder="Subject">
+        <input class="marks" placeholder="Marks" oninput="updateGPA(this)">
+        <input class="credit" placeholder="Credit">
+        <input class="grade" readonly placeholder="Grade">
+        <input class="gpa" readonly placeholder="GPA">
+        <button class="delete-btn" onclick="deleteRow(this)">Delete</button>
+    `;
+
+    document.getElementById("subjects").appendChild(row);
+}
+
+function deleteRow(btn) {
+    btn.parentElement.remove();
+    count--;
+}
+
+function updateGPA(input) {
+    let marks = parseFloat(input.value);
+    let row = input.parentElement;
+
+    let gpa = row.querySelector(".gpa");
+    let grade = row.querySelector(".grade");
+
+    if (!isNaN(marks)) {
+        let data = getGradeData(marks);
+        gpa.value = data.gpa;
+        grade.value = data.grade;
+    } else {
+        gpa.value = "";
+        grade.value = "";
+    }
+}
+
+function calculateCGPA() {
+    let rows = document.querySelectorAll(".row");
+
+    let total = 0, credits = 0;
+    let labels = [], data = [];
+
+    rows.forEach((row, i) => {
+        let name = row.querySelector(".name").value || "Sub " + (i+1);
+        let gpa = parseFloat(row.querySelector(".gpa").value);
+        let credit = parseFloat(row.querySelector(".credit").value);
+
+        if (!isNaN(gpa) && !isNaN(credit)) {
+            total += gpa * credit;
+            credits += credit;
+            labels.push(name);
+            data.push(gpa);
+        }
+    });
+
+    let cgpa = total / credits || 0;
+    document.getElementById("result").innerText = "CGPA: " + cgpa.toFixed(2);
+
+    if (chart) chart.destroy();
+
+    chart = new Chart(document.getElementById("chart"), {
+        type: "bar",
+        data: { labels: labels, datasets: [{ label: "GPA", data: data }] }
+    });
+}
+
+function downloadPDF() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+
+    doc.addImage("ipu.jpeg", "JPEG", 10, 5, 25, 25);
+    doc.text("GGSIPU Marksheet", 70, 15);
+
+    let rows = document.querySelectorAll(".row");
+    let table = [];
+
+    rows.forEach((row, i) => {
+        table.push([
+            row.querySelector(".name").value || "Sub "+(i+1),
+            row.querySelector(".marks").value,
+            row.querySelector(".credit").value,
+            row.querySelector(".grade").value,
+            row.querySelector(".gpa").value
+        ]);
+    });
+
+    doc.autoTable({
+        startY: 40,
+        head: [["Subject","Marks","Credit","Grade","GPA"]],
+        body: table
+    });
+
+    doc.save("Marksheet.pdf");
+}
+
+function toggleMode() {
+    document.body.classList.toggle("dark");
+}
+
+// Keyboard navigation
+document.addEventListener("keydown", function(e) {
+    const active = document.activeElement;
+    if (!active.closest(".row")) return;
+
+    let row = active.parentElement;
+    let rows = [...document.querySelectorAll(".row")];
+    let r = rows.indexOf(row);
+
+    let inputs = [...row.querySelectorAll("input")];
+    let c = inputs.indexOf(active);
+
+    let next;
+
+    if (e.key === "ArrowRight") next = inputs[c+1];
+    if (e.key === "ArrowLeft") next = inputs[c-1];
+    if (e.key === "ArrowDown" && rows[r+1])
+        next = rows[r+1].querySelectorAll("input")[c];
+    if (e.key === "ArrowUp" && rows[r-1])
+        next = rows[r-1].querySelectorAll("input")[c];
+
+    if (next) {
+        next.focus();
+        e.preventDefault();
+    }
+});
+
+for (let i = 0; i < 3; i++) addSubject();
+</script>
+
+</body>
+</html>
